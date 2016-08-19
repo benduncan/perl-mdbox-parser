@@ -1,0 +1,54 @@
+POC tools for parsing Dovecot mdbox storage and uploading to S3
+
+---
+
+mdbox-parse.pl: Version 1.0 🍺
+
+Usage:
+
+perl mdbox-parser.pl  --file [/path/to/mdbox] --dir [/path/to/directory] --out [/path/to/export] --eml --help --debug
+
+Requirements:
+
+--file or --dir must be specified. Either to a raw mdbox file, or a directory containing a users mdbox pathname
+--attachdir path to the Dovecot attachment directory, from the dovecot.conf
+
+Options:
+
+--out  			A pathname to a directory to export messages into. If not specfied will be printed to STDOUT
+--eml  			Append .eml to the filename on export, useful for viewing messages using third-party apps easier
+--debug			Shows message metadata without parsing to messages to disk or STDOUT
+--s3-host      		Hostname to the S3 instance to upload attachments
+--s3-secret-key		S3 secret key
+--s3-access-key		S3 access key
+--s3-bucket    		Name of the bucket to store attachments
+--loadattachs3 		Fetch attachments from S3, do not upload locally, rather load MIME parts from S3 storage
+--redisclient  		Optionally, specify a Redis server to cache all requests received from S3
+--redis-reloadcache    	Force all requests to S3, and reload the Redis cache with objects
+--help
+
+Example:
+
+Before using this utility, you must have a Dovecot user with a valid mdbox mail-store.
+
+Example conversion:
+doveadm sync -D -u ben@mydomain.com.au mdbox:/tmp/ben.mdbox
+Convert an existing user from maildir to mdbox format and export to /tmp/ben.mdbox
+
+Next dependency, you must specify the attachment directory used by Dovecot:
+cat /path/to/dovecot.conf | grep mail_attachment_dir
+mail_attachment_dir  = /tmp/attach
+
+Export mdbox to fully decoded MIME messages on disk, with attachments:
+perl mdbox-parse.pl --dir /tmp/ben.mdbox --attachdir /tmp/attach/ --out /tmp/mdbox-export/
+Scan /tmp/ben.mdbox for all messages and output fully encoded messages with attachments to /tmp/mdbox-export/
+
+Scan a specified mdbox file and output to STDOUT:
+perl mdbox-parse.pl --file /tmp/ben.mdbox/storage/m.9 --attachdir /tmp/attach/
+
+Decode mdbox attachments and upload to S3:
+perl mdbox-parse.pl --file /tmp/ben.mdbox/ --s3-secret-key SECRETKEY --s3-access-key ACCESSKEY --s3-host https://s3-us-west-2.amazonaws.com/ --s3-bucket MYBUCKET --attachdir /tmp/attach --loadattachs3 --out /tmp/mdbox.s3
+
+Decode mdbox attachments, query Redis for existing cache, else fetch from S3, store with EML extension:
+perl mdbox-parse.pl --file /tmp/ben.mdbox/ --s3-secret-key SECRETKEY --s3-access-key ACCESSKEY --s3-host https://s3-us-west-2.amazonaws.com/ --s3-bucket MYBUCKET --attachdir /tmp/attach --loadattachs3 --out /tmp/mdbox.s3 --redis-host 127.0.0.1 --eml
+
