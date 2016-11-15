@@ -28,6 +28,8 @@ $s3client;
 $redishost;
 $redisclient;
 $redisreloadcache;
+$s3path;
+$remove;
 
 use constant DBOX_VERSION => 2;
 use constant DBOX_MAGIC_PRE => "\001\002";
@@ -46,9 +48,11 @@ GetOptions(	"debug"		=> \$debug,
 			"s3-bucket=s"	=> \$s3bucket,
 			"s3-secret-key=s"	=> \$s3secretKey,
 			"s3-access-key=s"	=> \$s3accessKey,
+			"s3-path=s"			=> \$s3path,
 			"loadattachs3"		=> \$loadattachs3,
 			"redis-host=s"		=> \$redishost,
-			"redis-reloadcache"	=> \$redisreloadcache
+			"redis-reloadcache"	=> \$redisreloadcache,
+			"remove"			=> \$remove
 			) or die("Undefined args");
 
 # Simple error checking for the correct arguments
@@ -70,6 +74,10 @@ if(!-f $file && $file)	{
 
 if( $loadattachs3 && (!$s3host || !$s3bucket || !$s3secretKey || !$s3accessKey) ) {
 	die "--loadattachs3 defined, but missing full S3 credentials\n";
+}
+
+if( $remove && $loadattachs3 )	{
+	die "--remove defined, but cannot execute with --loadattachs3 specified.\n";
 }
 
 if( $s3host && $s3bucket && $s3secretKey && $s3accessKey )	{
@@ -353,9 +361,9 @@ foreach my $mail (@messages)	{
 			foreach(@s3upload)	{
 				my $file = $_;
 
-				my $attachData;
+				my $filename;
 
-				printSTDERR("Uploading $file:\t\t");
+				my $attachData;
 
 				open(F3, $file) || die "Cannot open $file: $!\n";
 				binmode(F3);
@@ -364,10 +372,37 @@ foreach my $mail (@messages)	{
 				}
 				close(F3);
 
-				$response = $s3client->put_object($s3bucket, $file, $attachData);
+				$filename = $file;
+
+				# If specified, upload the file to a specified directory, e.g
+				# /tmp/attach/ad/sb/[filename] => $s3host/$bucket/$s3path/ad/sb/[filename]
+				if( $s3path )	{
+					$filename =~ s#$attachdir#$s3path#g;
+				} else {
+					# Remove double // paths, S3 does not handle these very well
+					$filename =~ s#//##g;
+				}
+
+				printSTDERR("Uploading $filename:\t\t");
+
+				$response = $s3client->put_object($s3bucket, $filename, $attachData);
 
 				if($response->is_success)	{
 					printSTDERR("OK\n");
+
+					# If remove defined, purge the attachment on disk
+					if($remove)	{
+						$status = unlink($file);
+						printSTDERR("Removing $file:\t\t");
+
+						if($status)	{
+							printSTDERR("OK\n");
+						} else {
+							printSTDERR("FAILED ($!)\n");
+						}
+
+					}
+
 				} else	{
 					printSTDERR("FAILED (" . $response->content . ")\n");
 				}
@@ -501,6 +536,8 @@ sub usage()	{
 	print "\e[90m--s3-secret-key\e[39m\t\tS3 secret key\n";
 	print "\e[90m--s3-access-key\e[39m\t\tS3 access key\n";
 	print "\e[90m--s3-bucket\e[39m\t\tName of the bucket to store attachments\n";
+	print "\e[90m--s3-path\e[39m\t\tUpload into the specified directory\n";
+
 	print "\e[90m--loadattachs3\e[39m\t\tFetch attachments from S3, do not upload locally, rather load MIME parts from S3 storage\n";
 
 	print "\e[90m--redisclient\e[39m\t\tOptionally, specify a Redis server to cache all requests received from S3\n";
@@ -528,8 +565,8 @@ sub usage()	{
 	print "\e[4mScan a specified mdbox file and output to STDOUT:\e[24m\n";
 	print "perl mdbox-parse.pl --file /tmp/ben.mdbox/storage/m.9 --attachdir /tmp/attach/\n\n";
 
-	print "\e[4mDecode mdbox attachments and upload to S3:\e[24m\n";
-	print "perl mdbox-parse.pl --file /tmp/ben.mdbox/ --s3-secret-key SECRETKEY --s3-access-key ACCESSKEY --s3-host https://s3-us-west-2.amazonaws.com/ --s3-bucket MYBUCKET --attachdir /tmp/attach --loadattachs3 --out /tmp/mdbox.s3\n\n";
+	print "\e[4mDecode mdbox attachments and upload to S3, under $s3host/$bucket/$s3path/[filename]:\e[24m\n";
+	print "perl mdbox-parse.pl --file /tmp/ben.mdbox/ --s3-secret-key SECRETKEY --s3-access-key ACCESSKEY --s3-host https://s3-us-west-2.amazonaws.com/ --s3-bucket MYBUCKET --s3-path attachments/ --attachdir /tmp/attach --loadattachs3 --out /tmp/mdbox.s3\n\n";
 
 	print "\e[4mDecode mdbox attachments, query Redis for existing cache, else fetch from S3, store with EML extension:\e[24m\n";
 	print "perl mdbox-parse.pl --file /tmp/ben.mdbox/ --s3-secret-key SECRETKEY --s3-access-key ACCESSKEY --s3-host https://s3-us-west-2.amazonaws.com/ --s3-bucket MYBUCKET --attachdir /tmp/attach --loadattachs3 --out /tmp/mdbox.s3 --redis-host 127.0.0.1 --eml\n\n";
