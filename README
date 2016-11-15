@@ -25,6 +25,7 @@ Options:
 --loadattachs3 		Fetch attachments from S3, do not upload locally, rather load MIME parts from S3 storage
 --redisclient  		Optionally, specify a Redis server to cache all requests received from S3
 --redis-reloadcache    	Force all requests to S3, and reload the Redis cache with objects
+--remove			Remove local attachments on the filesystem once uploaded to S3
 --help
 
 Example:

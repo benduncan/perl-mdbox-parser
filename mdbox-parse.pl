@@ -543,6 +543,8 @@ sub usage()	{
 	print "\e[90m--redisclient\e[39m\t\tOptionally, specify a Redis server to cache all requests received from S3\n";
 	print "\e[90m--redis-reloadcache\e[39m\tForce all requests to S3, and reload the Redis cache with objects\n";
 
+	print "\e[90m--remove\e[39m\tRemove local attachments on the filesystem once uploaded to S3\n";
+
 	print "\e[90m--help\e[39m\n\n";
 
 	print "Example:\n\n";
